@@ -1,0 +1,24 @@
+{
+    "name": "AWSCDK & Golang",
+    "build": {
+      "dockerfile": "DockerFile"
+    },
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "esbenp.prettier-vscode",
+          "NeonXP.gotools",
+          "golang.Go",
+          "windmilleng.vscode-go-autotest",
+          "RomanPeshkov.go-test-outline"
+        ],
+        "settings": {
+          "terminal.integrated.defaultProfile.linux": "bash"
+        }
+      }
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/kot-management-lambda,type=bind,consistency=cached",
+    "workspaceFolder": "/workspaces/kot-management-lambda/",
+    "remoteUser": "devuser"
+  }
+  

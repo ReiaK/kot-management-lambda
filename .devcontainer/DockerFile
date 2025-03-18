@@ -1,0 +1,50 @@
+# ベースイメージとしてDebianを使用
+FROM debian:latest
+
+# 必要なパッケージをインストール
+RUN apt-get update && apt-get install -y \
+    curl \
+    unzip \
+    git \
+    sudo \
+    zsh \
+    vim \
+    jq \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js (最新のLTS) のインストール
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g aws-cdk
+
+# Golang (最新のLTS) のインストール
+RUN curl -fsSL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz -o go.tar.gz \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && rm go.tar.gz
+
+# 環境変数の設定
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# 開発用の非rootユーザー作成
+ARG USERNAME=devuser
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# 開発用のディレクトリを作成し、権限を設定
+WORKDIR /workspaces/kot-management-lambda
+RUN chown -R $USERNAME:$USERNAME /workspaces
+
+# ユーザーを devuser に切り替え
+USER $USERNAME
+
+# デフォルトのシェルを zsh に変更（好みで bash のままでもOK）
+SHELL ["/bin/zsh", "-c"]
+
+# デフォルトのコマンド
+CMD ["zsh"]
