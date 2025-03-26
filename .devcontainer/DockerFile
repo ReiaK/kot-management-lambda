@@ -1,9 +1,12 @@
 # ベースイメージとしてDebianを使用
-FROM debian:latest
+FROM debian:bookworm-slim
 
+WORKDIR /workspaces/kot-management-lambda
 # 必要なパッケージをインストール
 RUN apt-get update && apt-get install -y \
     curl \
+    zip \
+    file \
     unzip \
     git \
     sudo \
@@ -21,10 +24,11 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 # Node.js (最新のLTS) のインストール
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g aws-cdk
+    && npm install -g aws-cdk@latest 
+RUN npm install dotenv --save-dev
 
 # Golang (最新のLTS) のインストール
-RUN curl -fsSL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz -o go.tar.gz \
+RUN curl -fsSL https://go.dev/dl/go1.21.6.linux-amd64.tar.gz -o go.tar.gz \
     && tar -C /usr/local -xzf go.tar.gz \
     && rm go.tar.gz
 
@@ -42,7 +46,6 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
 # 開発用のディレクトリを作成し、権限を設定
-WORKDIR /workspaces/kot-management-lambda
 RUN chown -R $USERNAME:$USERNAME /workspaces
 
 # ユーザーを devuser に切り替え
