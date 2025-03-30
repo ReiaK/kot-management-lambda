@@ -2,70 +2,153 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
+	"time"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
-type SucessResponse struct {
-	Data interface{} `json:"data"`
+// リクエストパラメータの構造体
+type APIRequest struct {
+	Name string `json:"name"`
 }
 
-type ErrorResponse struct {
-	StatusCode   int    `json:"status_code"`
-	ErrorMessage string `json:"error_message"`
+type EmployeeGroups struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
+// 外部APIのレスポンスの構造体
+type ExternalAPIResponse struct {
+	DivisionCode   string           `json:"divisionCode"`
+	DivisionName   string           `json:"divisionName"`
+	Gender         string           `json:"gender"`
+	TypeCode       string           `json:"typeCode"`
+	TypeName       string           `json:"typeName"`
+	Code           string           `json:"code"`
+	Key            string           `json:"key"`
+	LastName       string           `json:"lastName"`
+	FirstName      string           `json:"firstName"`
+	EmployeeGroups []EmployeeGroups `json:"employeeGroups"`
+}
+
+// Lambda関数のレスポンス構造体
 type APIResponse struct {
-	Sucess bool           `json:"success"`
-	Data   interface{}    `json:"data,omitempty"`
-	Error  *ErrorResponse `json:"error,omitempty"`
+	Status  string                `json:"status"`
+	Message string                `json:"message,omitempty"`
+	Data    []ExternalAPIResponse `json:"data,omitempty"`
 }
 
-func NewSuccessResponse(data interface{}) APIResponse {
-	return APIResponse{
-		Sucess: true,
-		Data:   data,
+// type getEmployeesRequest struct {
+// 	Date             string `schema:"date"`
+// 	Division         string `schema:"division"`
+// 	IncludeResigner  bool   `schema:"includeResigner"`
+// 	AdditionalFields string `schema:"additionalFields"`
+// }
+
+const (
+	authorizationHeader = "Authorization"
+	contentType         = "Content-Type"
+	apllicationJson     = "application/json"
+)
+
+func callKotAPI() ([]ExternalAPIResponse, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	apiToken := os.Getenv("API_ACCESS_TOKEN")
+	if apiToken == "" {
+		log.Println("ERROR: API_ACCESS_TOKEN が環境変数に設定されていません")
+		return nil, fmt.Errorf("APIアクセストークンが設定されていません")
 	}
-}
 
-func NewErrorResponse(statusCode int, message string) APIResponse {
-	return APIResponse{
-		Sucess: false,
-		Error: &ErrorResponse{
-			StatusCode:   statusCode,
-			ErrorMessage: message,
-		},
-	}
-}
+	now := time.Now()
+	dateStr := now.Format("2006-01-02")
+	url := fmt.Sprintf("https://api.kingtime.jp/v1.0/employees?date=%s", dateStr)
 
-type getEmployeesRequest struct {
-	Date             string `schema:"date"`
-	Division         string `schema:"division"`
-	IncludeResigner  bool   `schema:"includeResigner"`
-	AdditionalFields string `schema:"additionalFields"`
-}
+	log.Printf("INFO: KOT外部APIを呼び出し - URL: %s", url)
 
-type Response struct {
-	Message string `json:"message"`
-}
-
-func GetEmployees(ctx context.Context, req *http.Request) (Response, error) {
-	resp, err := http.Get("https://httpbin.org/json")
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Printf("ERROR: HTTPリクエスト作成エラー: %s", err.Error())
+		return nil, err
 	}
+
+	req.Header.Set(authorizationHeader, "Bearer "+apiToken)
+	req.Header.Set(contentType, apllicationJson)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("ERROR: KOT外部APIリクエスト失敗: %s", err.Error())
+		return nil, err
+	}
+
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("Error:", err)
+	log.Printf("INFO: 外部APIレスポンス受信 - ステータスコード: %d", resp.StatusCode)
+
+	if resp.StatusCode != http.StatusOK {
+		errMessage := fmt.Sprintf("KOT外部APIエラーステータスコード %d", resp.StatusCode)
+		log.Println("ERROR: ", errMessage)
+		return nil, errors.New(errMessage)
 	}
 
-	message := fmt.Sprintf(`Hello, %s!`, body)
-	return Response{Message: message}, nil
+	log.Println("responseBody: ", resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("ERROR: レスポンスボディ読み取りエラー:", err)
+		return nil, err
+	}
+
+	var externalApiResponse []ExternalAPIResponse
+	if err := json.Unmarshal(body, &externalApiResponse); err != nil {
+		log.Println("ERROR: JSONパースエラー:", err)
+		return nil, err
+	}
+
+	log.Printf("INFO: 外部APIのレスポンスデータ: %+v", externalApiResponse)
+
+	return externalApiResponse, nil
+}
+
+func GetEmployees(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	log.Println("INFO: Lambda関数:getEmployeesFunction Start")
+
+	var apiRequest APIRequest
+	apiRequest.Name = request.QueryStringParameters["name"]
+
+	// KOT外部API呼び出し
+	externalResp, err := callKotAPI()
+	if err != nil {
+		log.Println("ERROR: KOT外部API呼び出しエラー:", err)
+		body := fmt.Sprintf(`{"status":"%d", "message":"%s"}`, http.StatusInternalServerError, err.Error())
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       body,
+		}, nil
+	}
+
+	log.Printf("INFO: 受信したリクエスト: %+v", apiRequest)
+
+	// 正常レスポンス
+	responseBody, _ := json.Marshal(APIResponse{
+		Status: fmt.Sprint(http.StatusOK),
+		Data:   externalResp,
+	})
+
+	log.Print("INFO: Lambda関数のレスポンスを返却: ", responseBody)
+	log.Println("INFO: Lambda関数:getEmployeesFunction End")
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+		Body:       string(responseBody),
+	}, nil
 }
 
 func main() {
