@@ -33,6 +33,12 @@ export class ApiGatewayStack extends cdk.Stack {
       integration: lambdaIntegration,
     });
 
+    this.httpApi.addRoutes({
+      path: "/api/employees/{division}",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: lambdaIntegration,
+    });
+
     new cdk.CfnOutput(this, 'ApiGatewayEndpoint', {
       value: this.httpApi.apiEndpoint,
       exportName: 'KotManagementApiGatewayEndpoint',

@@ -15,11 +15,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
-// リクエストパラメータの構造体
-type APIRequest struct {
-	Name string `json:"name"`
-}
-
 type EmployeeGroups struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
@@ -46,20 +41,13 @@ type APIResponse struct {
 	Data    []ExternalAPIResponse `json:"data,omitempty"`
 }
 
-// type getEmployeesRequest struct {
-// 	Date             string `schema:"date"`
-// 	Division         string `schema:"division"`
-// 	IncludeResigner  bool   `schema:"includeResigner"`
-// 	AdditionalFields string `schema:"additionalFields"`
-// }
-
 const (
 	authorizationHeader = "Authorization"
 	contentType         = "Content-Type"
 	apllicationJson     = "application/json"
 )
 
-func callKotAPI() ([]ExternalAPIResponse, error) {
+func callKotAPI(division string) ([]ExternalAPIResponse, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	apiToken := os.Getenv("API_ACCESS_TOKEN")
@@ -71,6 +59,10 @@ func callKotAPI() ([]ExternalAPIResponse, error) {
 	now := time.Now()
 	dateStr := now.Format("2006-01-02")
 	url := fmt.Sprintf("https://api.kingtime.jp/v1.0/employees?date=%s", dateStr)
+
+	if division != "" {
+		url += fmt.Sprintf("&division=%s", division)
+	}
 
 	log.Printf("INFO: KOT外部APIを呼び出し - URL: %s", url)
 
@@ -120,11 +112,11 @@ func callKotAPI() ([]ExternalAPIResponse, error) {
 func GetEmployees(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	log.Println("INFO: Lambda関数:getEmployeesFunction Start")
 
-	var apiRequest APIRequest
-	apiRequest.Name = request.QueryStringParameters["name"]
+	division := request.PathParameters["division"]
+	log.Printf("INFO: 受信したリクエスト: %+v", division)
 
 	// KOT外部API呼び出し
-	externalResp, err := callKotAPI()
+	externalResp, err := callKotAPI(division)
 	if err != nil {
 		log.Println("ERROR: KOT外部API呼び出しエラー:", err)
 		body := fmt.Sprintf(`{"status":"%d", "message":"%s"}`, http.StatusInternalServerError, err.Error())
@@ -133,8 +125,6 @@ func GetEmployees(ctx context.Context, request events.APIGatewayProxyRequest) (e
 			Body:       body,
 		}, nil
 	}
-
-	log.Printf("INFO: 受信したリクエスト: %+v", apiRequest)
 
 	// 正常レスポンス
 	responseBody, _ := json.Marshal(APIResponse{
