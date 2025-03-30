@@ -1,0 +1,129 @@
+openapi: 3.1.1
+info:
+  title: KOT Management API
+  description: KOTのWebAPIを利用して社内のKOTの管理を簡素化するためのAPI
+  version: '1.0'
+servers:
+  - url: https://bpn7qwzx20.execute-api.ap-northeast-1.amazonaws.com/
+    description: ApiGatewayのURL
+paths:
+  /api/getemployees:
+    post:
+      description: 従業員一覧を取得
+      requestBody: 
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                division:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        description: ステータスコード
+                      message:
+                        oneOf:
+                          - type: "null"
+                          - type: string
+                        description: エラー情報（成功時は `null`）
+                    required:
+                      - success
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            divisionCode:
+                              type: string
+                              example: 
+                                - 1000
+                            divisionName:
+                              type: string
+                              example:
+                                - 本社
+                            gender:
+                              type: string
+                              examples:
+                                - male
+                                - female
+                            typeCode:
+                              type: string
+                              example:
+                                - 1
+                            typeName:
+                              type: string
+                              example:
+                                - 正社員
+                            code:
+                              type: string
+                              example:
+                                - 1000
+                            lastName:
+                              type: string
+                              example:
+                                - 勤怠
+                            firstName:
+                              type: string
+                              example:
+                                - 太郎
+                            key:
+                              type: string
+                              example:
+                                - 8b6ee646a9620b286499c3df6918c4888a97dd7bbc6a26a18743f4697a1de4b3
+                            employeeGroups: 
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    example:
+                                      - 0001
+                                  name:
+                                    type: string
+                                    example:
+                                      - 人事部
+        '403':
+          description: レート制限が行われた場合のレスポンス
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: ステータスコード
+                  message:
+                    oneOf:
+                      - type: string
+                      - type: "null"
+                    description: エラー情報（成功時は `null`）
+                required:
+                  - success
+
+# components:
+#   schemas:
+#     BaseResponse:
+#       type: object
+#       properties:
+#         status:
+#           type: string
+#           description: ステータスコード
+#         message:
+#           oneOf:
+#             - type: "null"
+#             - type: string
+#           description: エラー情報（成功時は `null`）
+#       required:
+#         - success
