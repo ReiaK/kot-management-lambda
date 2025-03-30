@@ -28,7 +28,7 @@ export class ApiGatewayStack extends cdk.Stack {
     );
 
     this.httpApi.addRoutes({
-      path: "/employees",
+      path: "/api/employees",
       methods: [apigatewayv2.HttpMethod.GET],
       integration: lambdaIntegration,
     });
